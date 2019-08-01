@@ -2,9 +2,10 @@ package com.hims.personal_node
 
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.support.v4.text.HtmlCompat
 import android.text.Editable
-import android.text.Html
 import android.text.TextWatcher
+import android.util.Base64
 import android.widget.Toast
 import com.hims.personal_node.Model.ResponseDTO
 import com.hims.personal_node.messaging.RetrofitService
@@ -15,14 +16,16 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.regex.Pattern
-import android.util.Log
 import com.google.android.gms.tasks.OnCompleteListener
 import com.google.firebase.iid.FirebaseInstanceId
 import com.google.gson.Gson
 import com.hims.personal_node.Model.NodeIdentity
+import com.hims.personal_node.encryption.EncryptionRSA_Test
 import com.hims.personal_node.encryption.EncryptionRSA
+import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.SecureRandom
+import java.security.spec.X509EncodedKeySpec
 
 
 class MainActivity : AppCompatActivity() {
@@ -41,7 +44,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         //밑줄 추가
-        bt_otherWay.setText(Html.fromHtml("<u>" + bt_otherWay.getText().toString() + "</u>"))
+        bt_otherWay.text = HtmlCompat.fromHtml("<u>" + bt_otherWay.text + "</u>", HtmlCompat.FROM_HTML_MODE_LEGACY)
 
         //Retrofit Rest 수신 / ID PW
         var retrofit = Retrofit.Builder()
@@ -111,7 +114,7 @@ class MainActivity : AppCompatActivity() {
 
                 //SHA512 암호화
                 pw = EncryptionSHA.Encryption(pw)
-                println("pw:" + pw)
+//                println("pw:" + pw)
 
                 //데이터 객체화
                 var nodeIdentity = NodeIdentity(id, pw,null)
@@ -119,47 +122,49 @@ class MainActivity : AppCompatActivity() {
                 //객체 JSON화
                 val gson = Gson()
                 val nodeIdentity_json = gson.toJson(nodeIdentity)
-                println("nodeIdentity_json: "+ nodeIdentity_json.toString())
+//                println("nodeIdentity_json: "+ nodeIdentity_json.toString())
 
                 //TEST RSA 키 생성
                 var secureRandom = SecureRandom()
                 var gen = KeyPairGenerator.getInstance("RSA")
+                gen.initialize(2048, secureRandom)
                 var keyPair = gen.genKeyPair()
 
+                EncryptionRSA.init(this.applicationContext)
+
                 //RSA 암호화
-                val message = EncryptionRSA.encryption(nodeIdentity_json, keyPair.public)
-                println("message:" + message)
+                val message = EncryptionRSA_Test.encryption(nodeIdentity_json, keyPair.public)
+//                println("message:" + message)
 
                 //RSA 복호화
-                val reMessage = EncryptionRSA.decryption(message, keyPair.private)
-                println("reMessage:"+reMessage)
+                val reMessage = EncryptionRSA_Test.decryption(message, keyPair.private)
+//                println("reMessage:"+reMessage)
 
                 //String Rest화
                 var nodeIdentity2 = gson.fromJson(reMessage, NodeIdentity::class.java)
-                println("nodeIdentity2_test ID:"+nodeIdentity2.id)
-
+//                println("nodeIdentity2_test ID:"+nodeIdentity2.id)
 
                //서버 로그인 체크 REST
                 server?.postRequest(id,pw)?.enqueue(object : Callback<ResponseDTO> {
                     override fun onFailure(call: Call<ResponseDTO>?, t: Throwable?) {
                         messageToast(t.toString())
-                        println("fail:" + t.toString())
+//                        println("fail:" + t.toString())
                     }
                     override fun onResponse(call: Call<ResponseDTO>?, response: Response<ResponseDTO>?) {
                         messageToast(response?.body().toString())
-                        println("respon:" + response?.body().toString())
+//                        println("respon:" + response?.body().toString())
 
                         //FCM 토큰값 업데이트
                         FirebaseInstanceId.getInstance().instanceId
                             .addOnCompleteListener(OnCompleteListener { task ->
                                 if (!task.isSuccessful) {
-                                    Log.w("FIREBASE", "getInstanceId failed", task.exception)
+//                                    Log.w("FIREBASE", "getInstanceId failed", task.exception)
                                     return@OnCompleteListener
                                 }
 
                                 // Get new Instance ID token
                                 val token = task.result!!.token
-                                println("token:"+token)
+//                                println("token:"+token)
 
 //                         Log and toast
 //                        String msg = getString(R.string.msg_token_fmt, token);
@@ -171,6 +176,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
         bt_join.setOnClickListener(){
+            val publicKey = EncryptionRSA.getPublicKey()
+            val publicBytes = Base64.decode(publicKey, Base64.DEFAULT)
+            val keySpec = X509EncodedKeySpec(publicBytes)
+            val keyFactory = KeyFactory.getInstance("RSA")
+            val pubKey = keyFactory.generatePublic(keySpec)
+
+            var enText = EncryptionRSA_Test.encrypt2("test", pubKey)
+            println(enText)
+            var deText = EncryptionRSA.decrypt(enText)
+            println(deText)
         }
     }
 
