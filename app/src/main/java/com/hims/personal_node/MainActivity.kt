@@ -20,10 +20,9 @@ import com.google.android.gms.tasks.OnCompleteListener
 import com.google.firebase.iid.FirebaseInstanceId
 import com.google.gson.Gson
 import com.hims.personal_node.Model.NodeIdentity
-import com.hims.personal_node.encryption.EncryptionRSA_Test
-import com.hims.personal_node.encryption.EncryptionRSA
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
+import java.security.PublicKey
 import java.security.SecureRandom
 import java.security.spec.X509EncodedKeySpec
 
@@ -133,11 +132,11 @@ class MainActivity : AppCompatActivity() {
                 EncryptionRSA.init(this.applicationContext)
 
                 //RSA 암호화
-                val message = EncryptionRSA_Test.encryption(nodeIdentity_json, keyPair.public)
+                val message = EncryptionRSATest.encrypt(nodeIdentity_json, keyPair.public)
 //                println("message:" + message)
 
                 //RSA 복호화
-                val reMessage = EncryptionRSA_Test.decryption(message, keyPair.private)
+                val reMessage = EncryptionRSATest.decrypt(message, keyPair.private)
 //                println("reMessage:"+reMessage)
 
                 //String Rest화
@@ -177,12 +176,9 @@ class MainActivity : AppCompatActivity() {
         }
         bt_join.setOnClickListener(){
             val publicKey = EncryptionRSA.getPublicKey()
-            val publicBytes = Base64.decode(publicKey, Base64.DEFAULT)
-            val keySpec = X509EncodedKeySpec(publicBytes)
-            val keyFactory = KeyFactory.getInstance("RSA")
-            val pubKey = keyFactory.generatePublic(keySpec)
+            val pubKey:PublicKey = EncryptionRSA.stringToPublickey(publicKey)
 
-            var enText = EncryptionRSA_Test.encrypt2("test", pubKey)
+            var enText = EncryptionRSA.encryptTest("test", pubKey)
             println(enText)
             var deText = EncryptionRSA.decrypt(enText)
             println(deText)

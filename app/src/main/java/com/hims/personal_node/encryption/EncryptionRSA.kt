@@ -1,4 +1,4 @@
-package com.hims.personal_node.encryption
+package com.hims.personal_node
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -7,12 +7,11 @@ import android.security.KeyPairGeneratorSpec
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-//import timber.log.Timber
 import java.math.BigInteger
 import java.security.*
-//import java.security.Security
 import java.security.spec.RSAKeyGenParameterSpec
 import java.security.spec.RSAKeyGenParameterSpec.F4
+import java.security.spec.X509EncodedKeySpec
 import java.util.*
 import javax.crypto.Cipher
 import javax.security.auth.x500.X500Principal
@@ -60,7 +59,6 @@ object EncryptionRSA {
 
     internal fun init(applicationContext: Context) {
         if (isSupported) {
-//            Timber.w("Already initialised - Do not attempt to initialise this twice")
             return
         }
 
@@ -74,13 +72,9 @@ object EncryptionRSA {
         result = if (keyStore.containsAlias(alias)) {
             true
         } else {
-//            Timber.v("No keypair for %s, creating a new one", alias)
-
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP_MR1 && initAndroidM(alias)) {
-                println("initAndroidM_111111111")
                 true
             } else {
-                println("initAndroidM_22222222")
                 initAndroidL(alias)
             }
         }
@@ -120,18 +114,12 @@ object EncryptionRSA {
                 initialize(spec)
                 generateKeyPair()
             }
-//            Timber.i("Random keypair with %s/%s/%s is created.", KeyProperties.KEY_ALGORITHM_RSA,
-//                KeyProperties.BLOCK_MODE_CBC, KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
-
-            println("initAndroidM")
             return true
         } catch (e: GeneralSecurityException) {
             /*
              * Nonsense, but some devices manufactured by developing countries have actual problem
              * Consider using JCE substitutes like Spongy castle(Bouncy castle for android)
              */
-//            Timber.w(e, "It seems that this device does not support RSA algorithm!!")
-
             return false
         }
     }
@@ -156,13 +144,8 @@ object EncryptionRSA {
                 initialize(spec)
                 generateKeyPair()
             }
-//            Timber.i("Random RSA algorithm keypair is created.")
-
-            println("initAndroidL")
             return true
         } catch (e: GeneralSecurityException) {
-//            Timber.w(e, "It seems that this device does not support encryption!!")
-
             return false
         }
     }
@@ -203,10 +186,73 @@ object EncryptionRSA {
 
     fun getPublicKey():String{
         if (_isSupported) {
-            return Base64.encodeToString(publicKey.encoded, Base64.DEFAULT)
+            return publickeyToStoring(publicKey)
         }else{
-            return "null"
+            return "Don't have public key"
+        }
+    }
+
+    internal fun changeKey(applicationContext: Context) {
+        this.appContext = applicationContext
+        val alias = "${appContext.packageName}.rsakeypairs"
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply{
+            load(null)
         }
 
+        keyStore.deleteEntry(alias)
+
+        init(applicationContext)
+    }
+
+    fun stringToPublickey(keyString:String):PublicKey{
+        val publicBytes = Base64.decode(keyString, Base64.DEFAULT)
+        val keySpec = X509EncodedKeySpec(publicBytes)
+        val keyFactory = KeyFactory.getInstance("RSA")
+        return keyFactory.generatePublic(keySpec)
+    }
+
+    fun publickeyToStoring(pubKey: PublicKey):String{
+        return Base64.encodeToString(pubKey.encoded, Base64.DEFAULT)
+    }
+
+    fun stringToPrivatekey(keyString:String):PrivateKey{
+        val publicBytes = Base64.decode(keyString, Base64.DEFAULT)
+        val keySpec = X509EncodedKeySpec(publicBytes)
+        val keyFactory = KeyFactory.getInstance("RSA")
+        return keyFactory.generatePrivate(keySpec)
+    }
+
+    fun privatekeyToStoring(priKey: PrivateKey):String{
+        return Base64.encodeToString(priKey.encoded, Base64.DEFAULT)
+    }
+
+    fun encryptTest(plainText: String, pubKey: PublicKey): String {
+        if (!_isSupported) {
+            return plainText
+        }
+
+        val cipher = Cipher.getInstance(CIPHER_ALGORITHM).apply {
+            init(Cipher.ENCRYPT_MODE, pubKey)
+        }
+        val bytes = plainText.toByteArray(Charsets.UTF_8)
+        val encryptedBytes = cipher.doFinal(bytes)
+        val base64EncryptedBytes = Base64.encode(encryptedBytes, Base64.DEFAULT)
+
+        return String(base64EncryptedBytes)
+    }
+
+    fun decryptTest(base64EncryptedCipherText: String, priKey: PrivateKey): String {
+        if (!_isSupported) {
+            return base64EncryptedCipherText
+        }
+
+        val cipher = Cipher.getInstance(CIPHER_ALGORITHM).apply{
+            init(Cipher.DECRYPT_MODE, priKey)
+        }
+        val base64EncryptedBytes = base64EncryptedCipherText.toByteArray(Charsets.UTF_8)
+        val encryptedBytes = Base64.decode(base64EncryptedBytes, Base64.DEFAULT)
+        val decryptedBytes = cipher.doFinal(encryptedBytes)
+
+        return String(decryptedBytes)
     }
 }
