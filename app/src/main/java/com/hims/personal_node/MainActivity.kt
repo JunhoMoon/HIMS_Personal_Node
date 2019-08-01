@@ -132,11 +132,11 @@ class MainActivity : AppCompatActivity() {
                 EncryptionRSA.init(this.applicationContext)
 
                 //RSA 암호화
-                val message = EncryptionRSATest.encrypt(nodeIdentity_json, keyPair.public)
+                val message = EncryptionRSA.encryptTest(nodeIdentity_json, keyPair.public)
 //                println("message:" + message)
 
                 //RSA 복호화
-                val reMessage = EncryptionRSATest.decrypt(message, keyPair.private)
+                val reMessage = EncryptionRSA.decryptTest(message, keyPair.private)
 //                println("reMessage:"+reMessage)
 
                 //String Rest화
