@@ -15,6 +15,15 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.regex.Pattern
+import android.util.Log
+import com.google.android.gms.tasks.OnCompleteListener
+import com.google.firebase.iid.FirebaseInstanceId
+import com.google.gson.Gson
+import com.hims.personal_node.Model.NodeIdentity
+import com.hims.personal_node.encryption.EncryptionRSA
+import java.security.KeyPairGenerator
+import java.security.SecureRandom
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -26,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     var VALID_PASSWOLD_REGEX_ALPHA_NUM: Pattern = Pattern.compile("^[a-zA-Z0-9!@.#$%^&*?_~]{4,16}$")
     var VALID_PASSWOLD_REGEX_ALPHA_NUM_C: Pattern = Pattern.compile("[^a-zA-Z0-9!@.#\$%^&*?_~]")
 
+    @ExperimentalStdlibApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -35,13 +45,13 @@ class MainActivity : AppCompatActivity() {
 
         //Retrofit Rest 수신 / ID PW
         var retrofit = Retrofit.Builder()
-            .baseUrl("http://220.149.87.125:8080")
+            .baseUrl("http://220.149.87.125:10000")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         server = retrofit.create(RetrofitService::class.java)
 
         //아이디 체크
-        user_name.addTextChangedListener(object : TextWatcher {
+        user_id.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
 
             }
@@ -51,15 +61,15 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                if (VALID_EMAIL_ADDRESS_REGEX_C.matcher(user_name.getText().toString()).find()) {
+                if (VALID_EMAIL_ADDRESS_REGEX_C.matcher(user_id.getText().toString()).find()) {
                     messageToast("Invalid character")
-                    user_name.setText(
-                        user_name.getText().toString().substring(
+                    user_id.setText(
+                        user_id.getText().toString().substring(
                             0,
-                            user_name.getText().toString().length - 1
+                            user_id.getText().toString().length - 1
                         )
                     )
-                    user_name.setSelection(user_name.getText().toString().length)
+                    user_id.setSelection(user_id.getText().toString().length)
                 }
             }
         })
@@ -85,32 +95,90 @@ class MainActivity : AppCompatActivity() {
 
         //로그인 정보 확인
         bt_login.setOnClickListener() {
-            if (user_name.getText().toString().equals("")) {
+            var id = user_id.getText().toString()
+            var pw = user_pw.getText().toString()
+            if (id.equals("")) {
                 messageToast("Please enter e-Mail")
-                user_name.requestFocus()
-            } else if (!VALID_EMAIL_ADDRESS_REGEX.matcher(user_name.getText().toString()).matches()) {
+                user_id.requestFocus()
+            } else if (!VALID_EMAIL_ADDRESS_REGEX.matcher(id).matches()) {
                 messageToast("Please enter in e-Mail format")
-                user_name.requestFocus()
-            } else if (!VALID_PASSWOLD_REGEX_ALPHA_NUM.matcher(user_pw.getText().toString()).matches()) {
+                user_id.requestFocus()
+            } else if (!VALID_PASSWOLD_REGEX_ALPHA_NUM.matcher(pw).matches()) {
                 messageToast("Please enter Password")
                 user_pw.requestFocus()
             } else {
-                //중앙 서버 인증
-                server?.postRequest(user_name.getText().toString(),user_pw.getText().toString())?.enqueue(object : Callback<ResponseDTO> {
+                //중앙 서버 인증 공개키 획득
+
+                //SHA512 암호화
+                pw = EncryptionSHA.Encryption(pw)
+                println("pw:" + pw)
+
+                //데이터 객체화
+                var nodeIdentity = NodeIdentity(id, pw,null)
+
+                //객체 JSON화
+                val gson = Gson()
+                val nodeIdentity_json = gson.toJson(nodeIdentity)
+                println("nodeIdentity_json: "+ nodeIdentity_json.toString())
+
+                //TEST RSA 키 생성
+                var secureRandom = SecureRandom()
+                var gen = KeyPairGenerator.getInstance("RSA")
+                var keyPair = gen.genKeyPair()
+
+                //RSA 암호화
+                val message = EncryptionRSA.encryption(nodeIdentity_json, keyPair.public)
+                println("message:" + message)
+
+                //RSA 복호화
+                val reMessage = EncryptionRSA.decryption(message, keyPair.private)
+                println("reMessage:"+reMessage)
+
+                //String Rest화
+                var nodeIdentity2 = gson.fromJson(reMessage, NodeIdentity::class.java)
+                println("nodeIdentity2_test ID:"+nodeIdentity2.id)
+
+
+               //서버 로그인 체크 REST
+                server?.postRequest(id,pw)?.enqueue(object : Callback<ResponseDTO> {
                     override fun onFailure(call: Call<ResponseDTO>?, t: Throwable?) {
                         messageToast(t.toString())
+                        println("fail:" + t.toString())
                     }
-
                     override fun onResponse(call: Call<ResponseDTO>?, response: Response<ResponseDTO>?) {
                         messageToast(response?.body().toString())
+                        println("respon:" + response?.body().toString())
+
+                        //FCM 토큰값 업데이트
+                        FirebaseInstanceId.getInstance().instanceId
+                            .addOnCompleteListener(OnCompleteListener { task ->
+                                if (!task.isSuccessful) {
+                                    Log.w("FIREBASE", "getInstanceId failed", task.exception)
+                                    return@OnCompleteListener
+                                }
+
+                                // Get new Instance ID token
+                                val token = task.result!!.token
+                                println("token:"+token)
+
+//                         Log and toast
+//                        String msg = getString(R.string.msg_token_fmt, token);
+//                    Log.d("FIREBASE", token)
+//                        Toast.makeText(this, token, Toast.LENGTH_SHORT).show()
+                            })
                     }
                 })
             }
         }
+        bt_join.setOnClickListener(){
+        }
     }
 
-    fun messageToast(message: String) {
+    fun messageToast(message: String?) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+    companion object {
+        private const val TAG = "MainActivity"
     }
 }
 
