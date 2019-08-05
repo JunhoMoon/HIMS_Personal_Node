@@ -3,4 +3,6 @@
     <string name="msg_token_fmt" translatable="false">InstanceID Token: %s</string>
     <string name="default_notification_channel_id">Channel ID</string>
     <string name="default_notification_channel_name" translatable="true">Test</string>
+    <string name="HIMS_Server_AP" translatable="true">http://220.149.87.125:10000</string>
+    <string name="FCM_TOKEN" translatable="true"></string>
 </resources>

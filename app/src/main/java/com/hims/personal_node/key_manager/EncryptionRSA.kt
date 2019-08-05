@@ -1,4 +1,4 @@
-package com.hims.personal_node
+package com.hims.personal_node.key_manager
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -7,6 +7,10 @@ import android.security.KeyPairGeneratorSpec
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import com.hims.personal_node.R
+import com.hims.personal_node.RetrofitService
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import java.math.BigInteger
 import java.security.*
 import java.security.spec.RSAKeyGenParameterSpec
@@ -62,7 +66,7 @@ object EncryptionRSA {
             return
         }
 
-        this.appContext = applicationContext
+        appContext = applicationContext
         val alias = "${appContext.packageName}.rsakeypairs"
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply{
             load(null)
@@ -72,20 +76,23 @@ object EncryptionRSA {
         result = if (keyStore.containsAlias(alias)) {
             true
         } else {
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP_MR1 && initAndroidM(alias)) {
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP_MR1 && initAndroidM(
+                    alias
+                )
+            ) {
                 true
             } else {
                 initAndroidL(alias)
             }
         }
 
-        this.publicKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        publicKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             keyStore.getCertificate(alias).publicKey
         } else {
             val asymmetricKey = keyStore.getEntry(alias, null) as KeyStore.PrivateKeyEntry
             asymmetricKey.certificate.publicKey
         }
-        this.privateKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        privateKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             keyStore.getKey(alias, null) as PrivateKey
         } else {
             val asymmetricKey = keyStore.getEntry(alias, null) as KeyStore.PrivateKeyEntry
@@ -96,7 +103,9 @@ object EncryptionRSA {
 
     private fun initAndroidM(alias: String): Boolean {
         try {
-            with(KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, KEY_PROVIDER_NAME)) {
+            with(KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA,
+                KEY_PROVIDER_NAME
+            )) {
                 val spec = KeyGenParameterSpec.Builder(alias,
                     KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                     .setAlgorithmParameterSpec(RSAKeyGenParameterSpec(KEY_LENGTH_BIT, F4))
@@ -132,7 +141,9 @@ object EncryptionRSA {
         try {
             with(KeyPairGenerator.getInstance("RSA", KEY_PROVIDER_NAME)) {
                 val start = Calendar.getInstance(Locale.ENGLISH)
-                val end = Calendar.getInstance(Locale.ENGLISH).apply { add(Calendar.YEAR, VALIDITY_YEARS) }
+                val end = Calendar.getInstance(Locale.ENGLISH).apply { add(Calendar.YEAR,
+                    VALIDITY_YEARS
+                ) }
                 val spec = KeyPairGeneratorSpec.Builder(appContext)
                     .setKeySize(KEY_LENGTH_BIT)
                     .setAlias(alias)
@@ -154,7 +165,7 @@ object EncryptionRSA {
      * Beware that input must be shorter than 256 bytes. The length limit of plainText could be dramatically
      * shorter than 256 letters in certain character encoding, such as UTF-8.
      */
-    fun encrypt(plainText: String): String {
+    internal fun encrypt(plainText: String): String {
         if (!_isSupported) {
             return plainText
         }
@@ -169,7 +180,7 @@ object EncryptionRSA {
         return String(base64EncryptedBytes)
     }
 
-    fun decrypt(base64EncryptedCipherText: String): String {
+    internal fun decrypt(base64EncryptedCipherText: String): String {
         if (!_isSupported) {
             return base64EncryptedCipherText
         }
@@ -184,16 +195,16 @@ object EncryptionRSA {
         return String(decryptedBytes)
     }
 
-    fun getPublicKey():String{
-        if (_isSupported) {
-            return publickeyToStoring(publicKey)
+    internal fun getPublicKey():String{
+        return if (_isSupported) {
+            publickeyToStoring(publicKey)
         }else{
-            return "Don't have public key"
+            "Don't have public key"
         }
     }
 
     internal fun changeKey(applicationContext: Context) {
-        this.appContext = applicationContext
+        appContext = applicationContext
         val alias = "${appContext.packageName}.rsakeypairs"
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply{
             load(null)
@@ -204,29 +215,29 @@ object EncryptionRSA {
         init(applicationContext)
     }
 
-    fun stringToPublickey(keyString:String):PublicKey{
+    internal fun stringToPublickey(keyString:String):PublicKey{
         val publicBytes = Base64.decode(keyString, Base64.DEFAULT)
         val keySpec = X509EncodedKeySpec(publicBytes)
         val keyFactory = KeyFactory.getInstance("RSA")
         return keyFactory.generatePublic(keySpec)
     }
 
-    fun publickeyToStoring(pubKey: PublicKey):String{
+    internal fun publickeyToStoring(pubKey: PublicKey):String{
         return Base64.encodeToString(pubKey.encoded, Base64.DEFAULT)
     }
 
-    fun stringToPrivatekey(keyString:String):PrivateKey{
+    internal fun stringToPrivatekey(keyString:String):PrivateKey{
         val publicBytes = Base64.decode(keyString, Base64.DEFAULT)
         val keySpec = X509EncodedKeySpec(publicBytes)
         val keyFactory = KeyFactory.getInstance("RSA")
         return keyFactory.generatePrivate(keySpec)
     }
 
-    fun privatekeyToStoring(priKey: PrivateKey):String{
+    internal fun privatekeyToStoring(priKey: PrivateKey):String{
         return Base64.encodeToString(priKey.encoded, Base64.DEFAULT)
     }
 
-    fun encryptTest(plainText: String, pubKey: PublicKey): String {
+    internal fun encryptByOtherKey(plainText: String, pubKey: PublicKey): String {
         if (!_isSupported) {
             return plainText
         }
@@ -241,7 +252,7 @@ object EncryptionRSA {
         return String(base64EncryptedBytes)
     }
 
-    fun decryptTest(base64EncryptedCipherText: String, priKey: PrivateKey): String {
+    internal fun decryptByOtherKey(base64EncryptedCipherText: String, priKey: PrivateKey): String {
         if (!_isSupported) {
             return base64EncryptedCipherText
         }

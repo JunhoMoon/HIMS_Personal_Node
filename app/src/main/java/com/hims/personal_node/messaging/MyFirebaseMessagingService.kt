@@ -21,7 +21,9 @@ class MyFirebaseMessagingService : com.google.firebase.messaging.FirebaseMessagi
         if (remoteMessage.data != null) {
             val data = remoteMessage.data
             val title = data["title"]
-            val messagae = data["content"]
+            val messagae = data["message"]
+
+            println("messagaeTest : "+ messagae)
 
             sendNotification(title, messagae)
         }
